@@ -6,12 +6,15 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ApiResponse } from './types';
 
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') || 'http://localhost:5000/api';
+
 class ApiClient {
   private instance: AxiosInstance;
   private baseURL: string;
 
-  constructor(baseURL: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api') {
-    this.baseURL = baseURL;
+  constructor(baseURL: string = API_BASE_URL) {
+    this.baseURL = baseURL.replace(/\/+$/, '');
     this.instance = axios.create({
       baseURL: this.baseURL,
       timeout: 30000,
@@ -39,7 +42,9 @@ class ApiClient {
         if (error.response?.status === 401) {
           // Handle unauthorized - clear token and redirect to login
           this.clearToken();
-          window.location.href = '/login';
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(error);
       },
@@ -149,6 +154,7 @@ class ApiClient {
    * Token Management
    */
   setToken(token: string): void {
+    if (typeof window === 'undefined') return;
     localStorage.setItem('authToken', token);
     this.instance.defaults.headers.Authorization = `Bearer ${token}`;
   }
@@ -159,6 +165,7 @@ class ApiClient {
   }
 
   clearToken(): void {
+    if (typeof window === 'undefined') return;
     localStorage.removeItem('authToken');
     delete this.instance.defaults.headers.Authorization;
   }
