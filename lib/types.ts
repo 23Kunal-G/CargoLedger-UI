@@ -5,10 +5,10 @@
 
 // Auth Types
 export enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  BRANCH_MANAGER = 'BRANCH_MANAGER',
-  EMPLOYEE = 'EMPLOYEE',
-  CUSTOMER = 'CUSTOMER',
+  SUPER_ADMIN = 'super_admin',
+  BRANCH_MANAGER = 'branch_manager',
+  EMPLOYEE = 'employee',
+  CUSTOMER = 'customer',
 }
 
 export interface User {
@@ -40,6 +40,7 @@ export interface LoginPayload {
 // Branch Types
 export interface Branch {
   id: string;
+  branchUUID?: string;
   name: string;
   location: string;
   address: string;
@@ -54,6 +55,11 @@ export interface Branch {
   updatedAt: string;
   employeeCount?: number;
 }
+
+export type CreateBranchPayload = Omit<
+  Branch,
+  'id' | 'branchUUID' | 'createdAt' | 'updatedAt' | 'employeeCount'
+>
 
 // Shipment Types
 export enum ShipmentStatus {

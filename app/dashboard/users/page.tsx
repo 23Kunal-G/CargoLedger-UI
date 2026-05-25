@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Plus, Eye, Edit2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,6 +8,9 @@ import { User, UserRole } from '@/lib/types'
 import { colors } from '@/lib/colors'
 import { useRole } from '@/hooks/useRole'
 import { Badge } from '@/components/ui/badge'
+import { apiClient } from '@/lib/api'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
+import { unwrapApiList } from '@/lib/api-response'
 
 /**
  * Users Management Page
@@ -14,51 +18,40 @@ import { Badge } from '@/components/ui/badge'
  */
 export default function UsersPage() {
   const { isSuperAdmin } = useRole()
+  const [users, setUsers] = useState<User[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      email: 'admin@cargo.com',
-      firstName: 'Admin',
-      lastName: 'User',
-      role: UserRole.SUPER_ADMIN,
-      phone: '9876543210',
-      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      email: 'manager@cargo.com',
-      firstName: 'Rajesh',
-      lastName: 'Kumar',
-      role: UserRole.BRANCH_MANAGER,
-      branchId: 'kolkata-hq',
-      phone: '9876543211',
-      createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      email: 'emp@cargo.com',
-      firstName: 'Amit',
-      lastName: 'Singh',
-      role: UserRole.EMPLOYEE,
-      branchId: 'kolkata-hq',
-      phone: '9876543212',
-      createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      email: 'customer@cargo.com',
-      firstName: 'Priya',
-      lastName: 'Sharma',
-      role: UserRole.CUSTOMER,
-      phone: '9876543213',
-      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ]
+  const fetchUsers = async () => {
+    setIsLoading(true)
+    setError('')
+
+    const response = await apiClient.get<User[]>(API_ENDPOINTS.USERS.LIST)
+
+    if (response.success) {
+      setUsers(unwrapApiList<User>(response.data))
+    } else {
+      setError(response.error || 'Unable to load users')
+    }
+
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!isSuperAdmin()) return
+
+    const response = await apiClient.delete(API_ENDPOINTS.USERS.DELETE(userId))
+
+    if (response.success) {
+      setUsers((currentUsers) => currentUsers.filter((user) => user.id !== userId))
+    } else {
+      setError(response.error || 'Unable to delete user')
+    }
+  }
 
   const getRoleBadgeVariant = (role: UserRole) => {
     switch (role) {
@@ -96,6 +89,11 @@ export default function UsersPage() {
           >
             Manage system users and permissions
           </p>
+          {error && (
+            <p className="mt-2 text-sm" style={{ color: colors.status.cancelled }}>
+              {error}
+            </p>
+          )}
         </div>
         {isSuperAdmin() && (
           <Button
@@ -114,9 +112,22 @@ export default function UsersPage() {
       <Card>
         <CardHeader>
           <CardTitle>All Users</CardTitle>
-          <CardDescription>{mockUsers.length} total users</CardDescription>
+          <CardDescription>{users.length} total users</CardDescription>
         </CardHeader>
         <CardContent>
+          {isLoading ? (
+            <div className="flex h-32 items-center justify-center">
+              <p className="text-sm" style={{ color: colors.neutral.secondaryText }}>
+                Loading users...
+              </p>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="flex h-32 items-center justify-center">
+              <p className="text-sm" style={{ color: colors.neutral.secondaryText }}>
+                No users found
+              </p>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -169,7 +180,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockUsers.map((user) => {
+                {users.map((user) => {
                   const roleStyle = getRoleBadgeVariant(user.role)
                   return (
                     <tr
@@ -230,7 +241,12 @@ export default function UsersPage() {
                               <Button variant="ghost" size="icon">
                                 <Edit2 size={16} />
                               </Button>
-                              <Button variant="ghost" size="icon" className="text-destructive">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
                                 <Trash2 size={16} />
                               </Button>
                             </>
@@ -243,6 +259,7 @@ export default function UsersPage() {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

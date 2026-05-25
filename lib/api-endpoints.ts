@@ -26,8 +26,13 @@ export const API_ENDPOINTS = {
 
   // Branch endpoints
   BRANCHES: {
+    ALL: '/branches',
     LIST: '/branches',
+    SUPER_ADMIN_LIST: '/branches',
+    CURRENT: '/branches/me',
+    MY_BRANCH: '/branches/me',
     GET: (id: string) => `/branches/${id}`,
+    BY_MANAGER: (managerId: string) => `/branches/manager/${managerId}`,
     CREATE: '/branches',
     UPDATE: (id: string) => `/branches/${id}`,
     DELETE: (id: string) => `/branches/${id}`,

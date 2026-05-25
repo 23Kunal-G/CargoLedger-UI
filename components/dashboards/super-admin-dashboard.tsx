@@ -1,74 +1,113 @@
 'use client'
 
-import { BarChart3, Package, Users, MapPin, TrendingUp, Activity } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BarChart3, Package, Users, MapPin, Activity } from 'lucide-react'
 import { StatsCard } from '@/components/shared/stats-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { colors } from '@/lib/colors'
+import { apiClient } from '@/lib/api'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
+import { unwrapApiData } from '@/lib/api-response'
+
+interface SuperAdminDashboardData {
+  totalBranches?: number
+  totalManagers?: number
+  totalEmployees?: number
+  totalShipments?: number
+  pendingDeliveries?: number
+  verifiedShipments?: number
+  blockchainHashStored?: number
+  branchPendingDeliveries?: Array<{
+    branch: string
+    count: number
+    status?: string
+  }>
+  recentActivities?: Array<{
+    id: string | number
+    description: string
+    timestamp: string
+    status: string
+  }>
+  trends?: {
+    branches?: number
+    managers?: number
+    employees?: number
+    shipments?: number
+  }
+}
 
 /**
  * Super Admin Dashboard
  * Displays system-wide metrics and management overview
  */
 export function SuperAdminDashboard() {
-  // Mock data - will be replaced with API calls in Phase 2
+  const [dashboardData, setDashboardData] = useState<SuperAdminDashboardData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      setIsLoading(true)
+      setError('')
+
+      const response = await apiClient.get<SuperAdminDashboardData>(
+        API_ENDPOINTS.DASHBOARD.SUPER_ADMIN,
+      )
+
+      if (response.success) {
+        setDashboardData(unwrapApiData(response.data) || null)
+      } else {
+        setError(response.error || 'Unable to load dashboard data')
+      }
+
+      setIsLoading(false)
+    }
+
+    fetchDashboard()
+  }, [])
+
   const stats = [
     {
       title: 'Total Branches',
-      value: '12',
+      value: dashboardData?.totalBranches?.toLocaleString() || '0',
       icon: MapPin,
-      trend: { value: 8, isPositive: true },
+      trend: { value: dashboardData?.trends?.branches || 0, isPositive: true },
       variant: 'primary' as const,
     },
     {
       title: 'Total Managers',
-      value: '24',
+      value: dashboardData?.totalManagers?.toLocaleString() || '0',
       icon: Users,
-      trend: { value: 12, isPositive: true },
+      trend: { value: dashboardData?.trends?.managers || 0, isPositive: true },
       variant: 'primary' as const,
     },
     {
       title: 'Total Employees',
-      value: '156',
+      value: dashboardData?.totalEmployees?.toLocaleString() || '0',
       icon: Users,
-      trend: { value: 5, isPositive: true },
+      trend: { value: dashboardData?.trends?.employees || 0, isPositive: true },
       variant: 'success' as const,
     },
     {
       title: 'Total Shipments',
-      value: '8,752',
+      value: dashboardData?.totalShipments?.toLocaleString() || '0',
       icon: Package,
-      trend: { value: 23, isPositive: true },
+      trend: { value: dashboardData?.trends?.shipments || 0, isPositive: true },
       variant: 'primary' as const,
     },
   ]
 
-  const recentActivities = [
-    {
-      id: 1,
-      description: 'New branch created: Delhi Hub',
-      timestamp: '2 hours ago',
-      status: 'success',
-    },
-    {
-      id: 2,
-      description: 'Shipment CL202405001 delivered',
-      timestamp: '3 hours ago',
-      status: 'success',
-    },
-    {
-      id: 3,
-      description: 'Payment received for CL202405002',
-      timestamp: '5 hours ago',
-      status: 'pending',
-    },
-    {
-      id: 4,
-      description: 'New employee added: Amit Kumar',
-      timestamp: '1 day ago',
-      status: 'success',
-    },
-  ]
+  const recentActivities = dashboardData?.recentActivities || []
+  const branchPendingDeliveries = dashboardData?.branchPendingDeliveries || []
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center p-6">
+        <p style={{ color: colors.neutral.secondaryText }}>Loading dashboard...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 p-6 sm:p-8">
@@ -90,6 +129,11 @@ export function SuperAdminDashboard() {
         >
           Welcome back! Here&apos;s what&apos;s happening with your logistics network.
         </p>
+        {error && (
+          <p className="mt-2 text-sm" style={{ color: colors.status.cancelled }}>
+            {error}
+          </p>
+        )}
       </div>
 
       {/* Stats Grid */}
@@ -118,7 +162,9 @@ export function SuperAdminDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-foreground">1,258</div>
+            <div className="text-3xl font-bold text-foreground">
+              {dashboardData?.pendingDeliveries?.toLocaleString() || '0'}
+            </div>
             <p
               className="mt-2 text-sm"
               style={{
@@ -128,17 +174,18 @@ export function SuperAdminDashboard() {
               In transit across all branches
             </p>
             <div className="mt-4 space-y-3">
-              {[
-                { branch: 'Kolkata (HQ)', count: 320, status: 'pending' },
-                { branch: 'Bangalore', count: 250, status: 'pending' },
-                { branch: 'Mumbai', count: 310, status: 'pending' },
-              ].map((item) => (
+              {branchPendingDeliveries.map((item) => (
                 <div key={item.branch} className="flex items-center justify-between">
                   <span className="text-sm">{item.branch}</span>
-                  <StatusBadge status={item.status} />
+                  <StatusBadge status={item.status || 'pending'} />
                   <span className="font-semibold">{item.count}</span>
                 </div>
               ))}
+              {branchPendingDeliveries.length === 0 && (
+                <p className="text-sm" style={{ color: colors.neutral.secondaryText }}>
+                  No branch delivery data available.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -176,6 +223,11 @@ export function SuperAdminDashboard() {
                 <StatusBadge status={activity.status} className="ml-2" />
               </div>
             ))}
+            {recentActivities.length === 0 && (
+              <p className="text-sm" style={{ color: colors.neutral.secondaryText }}>
+                No recent activity available.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -212,14 +264,16 @@ export function SuperAdminDashboard() {
               >
                 Verified Shipments
               </p>
-              <p className="mt-1 text-2xl font-bold text-foreground">2,850</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">
+                {dashboardData?.verifiedShipments?.toLocaleString() || '0'}
+              </p>
               <p
                 className="mt-1 text-xs"
                 style={{
                   color: colors.status.success,
                 }}
               >
-                32.6% of total
+                System-wide verified count
               </p>
             </div>
             <div>
@@ -231,7 +285,11 @@ export function SuperAdminDashboard() {
               >
                 Blockchain Hash Stored
               </p>
-              <p className="mt-1 text-2xl font-bold text-foreground">2,850</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">
+                {dashboardData?.blockchainHashStored?.toLocaleString() ||
+                  dashboardData?.verifiedShipments?.toLocaleString() ||
+                  '0'}
+              </p>
               <p
                 className="mt-1 text-xs"
                 style={{

@@ -11,10 +11,67 @@ interface AuthContextType extends AuthState {
   updateUser: (user: User) => void
 }
 
+interface BackendUser {
+  userUUID?: string
+  id?: string
+  fullName?: string
+  firstName?: string
+  lastName?: string
+  email: string
+  role: string
+  branchUUID?: string | null
+  branchId?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+interface BackendAuthPayload {
+  token: string
+  user: BackendUser
+}
+
+interface BackendEnvelope<T> {
+  success?: boolean
+  message?: string
+  data?: T
+}
+
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export interface AuthProviderProps {
   children: ReactNode
+}
+
+function isUserRole(role: string): role is UserRole {
+  return Object.values(UserRole).includes(role as UserRole)
+}
+
+function normalizeUser(user: BackendUser): User {
+  const [firstName = '', ...lastNameParts] = (user.fullName || '').trim().split(/\s+/)
+  const now = new Date().toISOString()
+
+  if (!isUserRole(user.role)) {
+    throw new Error(`Unsupported user role: ${user.role}`)
+  }
+
+  return {
+    id: user.id || user.userUUID || '',
+    email: user.email,
+    firstName: user.firstName || firstName,
+    lastName: user.lastName || lastNameParts.join(' '),
+    role: user.role,
+    branchId: user.branchId || user.branchUUID || undefined,
+    createdAt: user.createdAt || now,
+    updatedAt: user.updatedAt || now,
+  }
+}
+
+function unwrapBackendData<T>(payload: T | BackendEnvelope<T>): T | undefined {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return (payload as BackendEnvelope<T>).data
+  }
+
+  return payload as T
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
@@ -57,11 +114,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   const verifyToken = useCallback(async () => {
     try {
-      const response = await apiClient.get<User>(API_ENDPOINTS.AUTH.VERIFY)
-      if (response.success && response.data) {
+      const response = await apiClient.get<BackendUser | BackendEnvelope<BackendUser>>(
+        API_ENDPOINTS.AUTH.VERIFY,
+      )
+      const backendUser = response.data ? unwrapBackendData<BackendUser>(response.data) : undefined
+
+      if (response.success && backendUser) {
         setState((prev) => ({
           ...prev,
-          user: response.data as User,
+          user: normalizeUser(backendUser),
           isAuthenticated: true,
         }))
       } else {
@@ -90,16 +151,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback(async (credentials: LoginPayload) => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
-      const response = await apiClient.post<{ user: User; token: string }>(
+      const response = await apiClient.post<BackendAuthPayload | BackendEnvelope<BackendAuthPayload>>(
         API_ENDPOINTS.AUTH.LOGIN,
         credentials,
       )
 
-      if (!response.success || !response.data) {
+      const authPayload = response.data
+        ? unwrapBackendData<BackendAuthPayload>(response.data)
+        : undefined
+
+      if (!response.success || !authPayload) {
         throw new Error(response.error || 'Login failed')
       }
 
-      const { user, token } = response.data
+      const { user: backendUser, token } = authPayload
+      const user = normalizeUser(backendUser)
       apiClient.setToken(token)
 
       setState({

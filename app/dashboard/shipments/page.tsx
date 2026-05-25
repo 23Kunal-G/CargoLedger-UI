@@ -1,103 +1,62 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ShipmentTable } from '@/components/shipment/shipment-table'
-import { Shipment, ShipmentStatus } from '@/lib/types'
+import { Shipment } from '@/lib/types'
 import { colors } from '@/lib/colors'
+import { apiClient } from '@/lib/api'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
+import { unwrapApiList } from '@/lib/api-response'
 
 /**
  * Shipments Page
  * Displays and manages all shipments
  */
 export default function ShipmentsPage() {
-  // Mock data - will be replaced with API calls
-  const mockShipments: Shipment[] = [
-    {
-      id: '1',
-      trackingNumber: 'CL2024050015',
-      status: ShipmentStatus.IN_TRANSIT,
-      customerId: 'cust1',
-      fromBranchId: 'kolkata-hq',
-      toBranchId: 'delhi-hub',
-      senderName: 'Amit Kumar',
-      senderPhone: '9876543210',
-      senderAddress: '123 Main St, Kolkata',
-      receiverName: 'Rajesh Singh',
-      receiverPhone: '9123456789',
-      receiverAddress: '456 Park Ave, Delhi',
-      itemDescription: 'Electronics - Laptop',
-      weight: 2.5,
-      amount: 5000,
-      paymentStatus: 'COMPLETED',
-      estimatedDelivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-      isBlockchainVerified: true,
-      blockchainHash: '0x1234567890abcdef1234567890abcdef',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      trackingNumber: 'CL2024050014',
-      status: ShipmentStatus.DELIVERED,
-      customerId: 'cust2',
-      fromBranchId: 'bangalore-hub',
-      toBranchId: 'mumbai-hub',
-      senderName: 'Priya Sharma',
-      senderPhone: '9876543211',
-      senderAddress: '789 Tech Park, Bangalore',
-      receiverName: 'Vikram Patel',
-      receiverPhone: '9123456790',
-      receiverAddress: '321 Business St, Mumbai',
-      itemDescription: 'Documents - Important Papers',
-      weight: 0.5,
-      amount: 2000,
-      paymentStatus: 'COMPLETED',
-      estimatedDelivery: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      actualDelivery: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      isBlockchainVerified: true,
-      blockchainHash: '0xabcdef1234567890abcdef1234567890',
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      trackingNumber: 'CL2024050013',
-      status: ShipmentStatus.PENDING,
-      customerId: 'cust3',
-      fromBranchId: 'chennai-hub',
-      toBranchId: 'hyderabad-hub',
-      senderName: 'Sunil Reddy',
-      senderPhone: '9876543212',
-      senderAddress: '555 Industrial Area, Chennai',
-      receiverName: 'Anjali Gupta',
-      receiverPhone: '9123456791',
-      receiverAddress: '789 Tech Street, Hyderabad',
-      itemDescription: 'Textiles - Fabric Rolls',
-      weight: 15.0,
-      amount: 8500,
-      paymentStatus: 'PENDING',
-      estimatedDelivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      isBlockchainVerified: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ]
-
+  const [shipments, setShipments] = useState<Shipment[]>([])
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const fetchShipments = async () => {
+    setIsLoading(true)
+    setError('')
+
+    const response = await apiClient.get<Shipment[]>(API_ENDPOINTS.SHIPMENTS.LIST)
+
+    if (response.success) {
+      setShipments(unwrapApiList<Shipment>(response.data))
+    } else {
+      setError(response.error || 'Unable to load shipments')
+    }
+
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    fetchShipments()
+  }, [])
 
   const handleViewShipment = (shipment: Shipment) => {
     setSelectedShipment(shipment)
-    console.log('View shipment:', shipment)
   }
 
   const handleEditShipment = (shipment: Shipment) => {
-    console.log('Edit shipment:', shipment)
+    setSelectedShipment(shipment)
   }
 
-  const handleDeleteShipment = (shipmentId: string) => {
-    console.log('Delete shipment:', shipmentId)
+  const handleDeleteShipment = async (shipmentId: string) => {
+    const response = await apiClient.delete(API_ENDPOINTS.SHIPMENTS.DELETE(shipmentId))
+
+    if (response.success) {
+      setShipments((currentShipments) =>
+        currentShipments.filter((shipment) => shipment.id !== shipmentId),
+      )
+    } else {
+      setError(response.error || 'Unable to delete shipment')
+    }
   }
 
   return (
@@ -121,6 +80,11 @@ export default function ShipmentsPage() {
           >
             Manage and track all shipments
           </p>
+          {error && (
+            <p className="mt-2 text-sm" style={{ color: colors.status.cancelled }}>
+              {error}
+            </p>
+          )}
         </div>
         <Button
           style={{
@@ -135,12 +99,18 @@ export default function ShipmentsPage() {
 
       {/* Shipment Table */}
       <ShipmentTable
-        shipments={mockShipments}
+        shipments={shipments}
         onView={handleViewShipment}
         onEdit={handleEditShipment}
         onDelete={handleDeleteShipment}
+        isLoading={isLoading}
         showFilters={true}
       />
+      {selectedShipment && (
+        <p className="text-sm" style={{ color: colors.neutral.secondaryText }}>
+          Selected shipment: {selectedShipment.trackingNumber}
+        </p>
+      )}
     </div>
   )
 }
